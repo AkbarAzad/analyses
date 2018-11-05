@@ -1,0 +1,76 @@
+#Customer Segmentation 
+##K-Means Clustering
+#SQL Query
+SELECT a.CUST_MSISDN,a.brnd_name,a.brnd_id,a.brnd_grp,a.brnd_grp_id, a.SVC_CLASS_NAME, a.TXN_DT,a.TXN_ID, a.ORIG_AMT, b.acct_natly, b.acct_dob, b.acct_gndr,b.acct_occ,b.acct_idn_type
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM a
+RIGHT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT b
+ON a.CUST_MSISDN = b.ACCT_NAME
+WHERE (a.STAT = 'PST' OR a.STAT = 'PST7' OR a.STAT = 'PST9')
+And TRUNC(a.TXN_DT) BETWEEN TO_DATE('01/04/17','DD/MM/YY') AND TO_DATE('01/04/18','DD/MM/YY')
+AND a.CUST_MSISDN != '6583381170' 
+AND a.CUST_MSISDN != '6597727199'
+AND a.CUST_MSISDN != '6596510899'
+And a.data_txn_rfnd = 'False'
+AND b.acct_stat = 'A'
+#Export as csv to C:\\Users\\P1318124\\Desktop\\BA Projects\\Customer Segmentation\\Customer_Segmentation_R.csv
+#R Code
+#install.packages("pastecs", repos="http://cran.us.r-project.org")
+#install.packages("fpc", repos="http://cran.us.r-project.org")
+#install.packages("FactoMineR", repos="http://cran.us.r-project.org")
+#install.packages("plotly", repos="http://cran.us.r-project.org")
+library(tidyr)
+library(pastecs)
+library(fpc)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(lubridate)
+
+data <- read.csv("C:\\Users\\P1318124\\Desktop\\BA Projects\\Customer Segmentation\\Customer_Segmentation_R.csv",header=TRUE)
+
+data_rev <- data %>%
+select(CUST_MSISDN,TXN_DT,ORIG_AMT)
+
+data_rev <- data_rev[data_rev$ORIG_AMT >= 0.9,]
+
+#Convert date column to date type
+#data_rev$TXN_DT <- as.character(data_rev$TXN_DT)
+data_rev$TXN_DT <- dmy(data_rev$TXN_DT)
+data_rev$TXN_DT <- as.Date(data_rev$TXN_DT,format='%Y/%m/%d')
+
+#Create datediff column to find number of days since last purchase for recency
+data_rev$days_since <- as.numeric(difftime(time1='2018-11-05',time2=data_rev$TXN_DT,unit="days"))
+
+#Create dataset to show customer's recency, frequency and monetary information
+customers <- data_rev %>%
+group_by(CUST_MSISDN) %>%
+summarise(recency=min(days_since),frequency=n(),monetary = mean(ORIG_AMT))
+
+#Data Exploration
+##Descriptive Statistics
+options(digits = 2, scipen = 99)
+stat.desc(select(customers, -CUST_MSISDN))
+
+str(customers)
+
+ggplot(customers, aes(x = frequency)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "", title = "Purchase frequency") +
+   scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12,14,16,18,20,22))
+
+dim(filter(customers, frequency == 1))[1]/dim(customers)[1]
+#only 21% of customers made only 1 transaction
+dim(filter(customers, frequency == 2))[1]/dim(customers)[1]
+#only 10% of customers made only 2 transactions
+dim(filter(customers, frequency == 3))[1]/dim(customers)[1]
+#only 6.8% of customers made only 3 transactions
+
+
+
+
+
+
+
+
+
