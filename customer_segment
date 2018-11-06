@@ -53,6 +53,7 @@ stat.desc(select(customers, -CUST_MSISDN))
 
 str(customers)
 
+#frequency
 ggplot(customers, aes(x = frequency)) +
    geom_histogram(bins = 20, fill = "steelblue") +
    theme_classic() +
@@ -65,6 +66,121 @@ dim(filter(customers, frequency == 2))[1]/dim(customers)[1]
 #only 10% of customers made only 2 transactions
 dim(filter(customers, frequency == 3))[1]/dim(customers)[1]
 #only 6.8% of customers made only 3 transactions
+
+#recency
+ggplot(customers, aes(x = recency)) +
+   geom_histogram(fill = "steelblue") +
+   theme_classic() +
+   labs(x = "", y = "", title = "Recency in Days") +
+  scale_x_continuous(breaks = c(0, 250, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000))
+
+#189 days between 30 Apr 2018 and 5 Nov 2018
+dim(filter(customers, recency < 369))[1]/dim(customers)[1]
+#76% of customers do transactions within 3 months to Apr 2018
+
+dim(filter(customers, recency > 549))[1]/dim(customers)[1]
+#3.1% of customers did not make transaction in 6 months to Apr 2018
+
+#monetary
+summary(customers$monetary)
+
+ggplot(customers, aes(x = monetary)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "average amount", title = "Average purchase amount")
+
+ggplot(customers, aes(x = monetary)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "amount (log10)", 
+        title = "Average purchase amount\n (Data are log transformed to ease visualization)") +
+   scale_x_log10()
+
+#Statistical Segmentation
+##Data Preparation
+## Remove customer_id column and set as row names
+customers <- as.data.frame(customers)
+row.names(customers) <- customers$CUST_MSISDN
+customers <- select(customers, -CUST_MSISDN)
+
+## Scale data to balance the influence of variables measured on different scales and/or with vastly different ## variances
+clust_data <- scale(customers)
+
+#Clustering method
+set.seed(11)
+hc.complete =hclust (dist(clust_data), method = "complete")
+hc.average =hclust (dist(clust_data), method = "average")
+hc.ward =hclust (dist(clust_data), method = "ward.D2")
+
+#Dendograms
+#plot(hc.complete, main = "Complete Linkage", xlab = "", sub = "", cex = .9)
+#plot(hc.average, main = "Average Linkage", xlab = "", sub = "", cex = .9)
+#plot(hc.ward, main = "Cluster Tree", xlab = "", sub = "", cex = .9)
+#rect.hclust(hc.ward, k = 5, border = "darkred")
+plot(hc.ward, main = "Cluster Tree cut at 6 clusters", xlab = "", sub = "", cex = .9)
+abline(h = 82, col = "red")
+#Cluster tree cut at 6 clusters
+clusters <- cutree(hc.ward, 6)
+table(clusters)
+
+#Assign customers to clusters
+customers$cluster <- clusters
+
+profiles <- customers %>% 
+  group_by(cluster) %>%
+  summarise_all(funs(mean))
+
+cluster_counts <- customers %>% 
+  group_by(cluster) %>% 
+  summarise(counts = n())
+
+profiles <- mutate(profiles, counts = cluster_counts$counts) 
+profiles
+
+customers$cluster <- as.factor(customers$cluster)
+
+
+#Clustering visualisation
+#monetary vs frequency
+ggplot(data = customers,
+       aes(x = frequency, y = monetary, colour = cluster, shape = cluster)) +
+  geom_point() +
+  theme_dark() +
+  labs(title = "average amount spent vs. frequency", 
+       shape = "customer\nclusters", colour = "customer\nclusters")
+#monetary vs recency
+ggplot(data = customers,
+       aes(x = recency, y = monetary, colour = cluster, shape = cluster)) +
+  geom_point() +
+  theme_dark() +
+  labs(title = "average amount spent vs recency",  shape = "cluster", colour = "cluster")
+
+## Project clusters onto the first 2 principal components
+
+prin_comp <- princomp(clust_data)
+nComp <- 2
+project <- predict(prin_comp, newdata=clust_data)[,1:nComp]
+
+## Create dataframe with transformed data
+
+project_data <- cbind(as.data.frame(project),
+                      cluster = as.factor(clusters))
+
+ggplot(project_data, aes(x=Comp.1, y=Comp.2)) +
+   geom_point(aes(shape=cluster, colour = cluster)) +
+   theme_dark() +
+   labs(x = "Principal Component 1", y = "Principal Component 2")
+
+#Evaluating clusters
+clust_no <- 6
+
+set.seed(12)
+cboot_hclust <- clusterboot(clust_data, 
+                            clustermethod = hclustCBI,
+                            method = "ward.D2", 
+                            k = clust_no)
+
+
 
 
 
