@@ -1,0 +1,61 @@
+library(dplyr)
+library(lubridate)
+library(readxl)
+library(xlsx)
+library(openxlsx)
+
+#google_compile <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile.csv",header=TRUE)
+
+
+google_day <- read_excel("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\2017-2018\\invoice_details_with_fx_v3_SINGTEL_DCB_201810-00004-of-00005.xlsx",1)
+google_day <- as.data.frame(google_day)
+
+google_day_rev <- google_day %>%
+select(CorrelationId, Timestamp, 'Payment Description','Subscription Id','Merchant Contact',MSISDN,transaction_status,app,item_price_in_local_currency,total_amount_in_local_currency)
+
+
+#google_compile <- google_day_rev
+
+colnames(google_day_rev) <- colnames(google_compile)
+google_day_rev$CorrelationId <- as.factor(google_day_rev$CorrelationId)
+google_day_rev$TimeStamp <- as.factor(google_day_rev$TimeStamp)
+google_day_rev$Payment.Description <- as.factor(google_day_rev$Payment.Description)
+google_day_rev$Subscription.Id <- as.factor(google_day_rev$Subscription.Id)
+google_day_rev$Merchant.Contact <- as.factor(google_day_rev$Merchant.Contact)
+google_day_rev$transaction_status <- as.factor(google_day_rev$transaction_status)
+google_day_rev$app <- as.factor(google_day_rev$app)
+#google_day_rev$Date <- as.Date(google_day_rev$TimeStamp,format='%Y-%m-%d')
+
+google_compile <- rbind(google_compile,google_day_rev)
+
+
+dim(google_compile)
+
+##########################
+
+#write.csv(google_compile,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile.csv",row.names=FALSE)
+
+###########################
+###########################
+
+google_compile$MSISDN <- as.factor(google_compile$MSISDN)
+
+google_compile$Date <- as.Date(google_compile$TimeStamp,format='%Y-%m-%d')
+
+google_filter <- google_compile %>%
+filter(transaction_status == "EP_SUCCESS")
+
+write.csv(google_filter,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_filter.csv",row.names=FALSE)
+
+
+google_compile_top_sum <- google_compile %>%
+filter(transaction_status == "EP_SUCCESS") %>%
+group_by(app) %>%
+summarise(nsum=sum(total_amount_in_local_currency), ntransact = n(), npeople = n_distinct(MSISDN)) %>%
+arrange(desc(nsum))
+
+head(google_compile_top_sum,n=10)
+
+google_compile_top_sum <- as.data.frame(google_compile_top_sum)
+
+#write.csv(google_compile_top_sum,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile_top_sum.csv",row.names=FALSE)
