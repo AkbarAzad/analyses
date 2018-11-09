@@ -18,6 +18,16 @@ AND b.acct_stat = 'A'
 #install.packages("fpc", repos="http://cran.us.r-project.org")
 #install.packages("FactoMineR", repos="http://cran.us.r-project.org")
 #install.packages("plotly", repos="http://cran.us.r-project.org")
+#install.packages("plot3D", repos="http://cran.us.r-project.org")
+#install.packages("plot3Drgl", repos="http://cran.us.r-project.org")
+#install.packages("cluster", repos="http://cran.us.r-project.org")
+#install.packages("factoextra", repos="http://cran.us.r-project.org")
+
+library(factoextra)
+library(silhouette)
+library(cluster)
+library(plot3Drgl)
+library(plot3D)
 library(tidyr)
 library(pastecs)
 library(fpc)
@@ -61,11 +71,14 @@ ggplot(customers, aes(x = frequency)) +
    scale_x_continuous(breaks = c(0, 2, 4, 6, 8, 10, 12,14,16,18,20,22))
 
 dim(filter(customers, frequency == 1))[1]/dim(customers)[1]
-#only __% of customers made only 1 transaction
+#only _____% of customers made only 1 transaction
 dim(filter(customers, frequency == 2))[1]/dim(customers)[1]
-#only __% of customers made only 2 transactions
+#only ____% of customers made only 2 transactions
 dim(filter(customers, frequency == 3))[1]/dim(customers)[1]
-#only __% of customers made only 3 transactions
+#only ____% of customers made only 3 transactions
+dim(filter(customers, frequency >= 3))[1]/dim(customers)[1]
+#only ___% of customers made only 3 transactions
+
 
 #recency
 ggplot(customers, aes(x = recency)) +
@@ -74,12 +87,12 @@ ggplot(customers, aes(x = recency)) +
    labs(x = "", y = "", title = "Recency in Days") +
   scale_x_continuous(breaks = c(0, 250, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000))
 
-#189 days between 30 Apr 2018 and 5 Nov 2018
+#___ days between ________ and _________
 dim(filter(customers, recency < 369))[1]/dim(customers)[1]
-#__% of customers do transactions within 3 months to Apr 2018
+#__% of customers do transactions within ____ months to ______
 
 dim(filter(customers, recency > 549))[1]/dim(customers)[1]
-#__% of customers did not make transaction in 6 months to Apr 2018
+#___% of customers did not make transaction in _____ months to _______
 
 #monetary
 summary(customers$monetary)
@@ -115,10 +128,10 @@ hc.ward =hclust (dist(clust_data), method = "ward.D2")
 #Dendograms
 #plot(hc.complete, main = "Complete Linkage", xlab = "", sub = "", cex = .9)
 #plot(hc.average, main = "Average Linkage", xlab = "", sub = "", cex = .9)
-#plot(hc.ward, main = "Cluster Tree", xlab = "", sub = "", cex = .9)
-#rect.hclust(hc.ward, k = 5, border = "darkred")
+plot(hc.ward, main = "Cluster Tree", xlab = "", sub = "", cex = .9)
+rect.hclust(hc.ward, k = 5, border = "darkred")
 plot(hc.ward, main = "Cluster Tree cut at 6 clusters", xlab = "", sub = "", cex = .9)
-abline(h = 82, col = "red")
+abline(h = 82, col = "red") #??
 #Cluster tree cut at 6 clusters
 clusters <- cutree(hc.ward, 6)
 table(clusters)
@@ -183,7 +196,7 @@ cboot_hclust <- clusterboot(clust_data,
 bootMean_data <- data.frame(cluster = 1:6, bootMeans = cboot_hclust$bootmean)
 
 #Visualise evaluation results
-#A rule of thumb for interpreting stability values suggests that clusters scored below 0.6 should be considered unstable.
+#A rule of thumb for interpreting stability values (Jaccard similarity value) suggests that clusters scored below 0.6 should be considered unstable.
 #Those between 0.6 and 0.75 are measuring patterns to a reasonable degree. 
 #Scores above 0.8 indicate highly stable clusters.
 
@@ -197,6 +210,56 @@ ggplotly(p)
 
 #End.
 
+scatter3D(customers$recency,customers$frequency,customers$monetary,phi=0,bty="g")
+
+hist3D_fancy(customers$recency,customers$frequency,customers$monetary)
+library(plot3Drgl)
+plotrgl()
+
+#silhouette
+#cl <- hclust(as.dist(clust_data,diag = TRUE, upper = TRUE), method= 'ward.D2')
+#sil_cl <- silhouette(cutree(cl, h=82) ,as.dist(clust_data), title=title(main = 'Good'))
+
+#rownames(sil_cl) <- rownames(clust_data)
+
+#plot(sil_cl)
+
+#Average Silhouette Width
+#fviz_dend(hc.ward, show_labels = FALSE, rect = TRUE)
+
+hc.cut <- hcut(clust_data, k = 6, hc_method = "ward.D2")
+
+
+fviz_silhouette(hc.cut) #Average Silhouette Width is 0.385, which is higher than k=3,4,5. Hence shoose k=6.
+#k=6 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.42
+#2       2  3240          0.24
+#3       3  3073          0.55
+#4       4   317          0.48
+#5       5  2010          0.14
+#6       6  1706          0.48
+
+#k=5 clusters
+# cluster  size ave.sil.width
+#1       1 10698          0.46
+#2       2  3240          0.26
+#3       3  3073          0.59
+#4       4   317          0.48
+#5       5  3716          0.12
+ 
+#k=4 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.50
+#2       2  3557          0.17
+#3       3  3073          0.59
+#4       4  3716          0.12
+
+#k=3 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.54
+#2       2  3557          0.18
+#3       3  6789          0.13
 
 
 
