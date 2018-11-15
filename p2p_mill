@@ -1,0 +1,140 @@
+SELECT l.Txn_Flow, l.sender_id,l.sender_msisdn, l.orig_amt, l.Year_Month, l.Sender_Vfy, m.acct_natly AS sender_natly, m.acct_idn_type AS sender_idn_type, m.acct_occ AS sender_occ, l.receiver_msisdn, l.receiver_vfy, l.receiver_id, l.receiver_natly, l.receiver_idn_type, l.receiver_occ
+FROM 
+(
+SELECT j.Txn_Flow, j.sender_id,j.sender_msisdn, j.orig_amt, j.Year_Month, j.Sender_Vfy, j.receiver_msisdn, j.receiver_vfy, j.receiver_id, k.acct_natly AS receiver_natly, k.acct_idn_type AS receiver_idn_type, k.acct_occ AS receiver_occ
+FROM
+(
+SELECT
+(CASE 
+WHEN i.sender_vfy LIKE '%Remittance%' AND i.receiver_vfy LIKE '%Remittance%'
+  THEN 'Remit-Remit'
+WHEN i.sender_vfy LIKE '%Remittance%' AND (i.receiver_vfy NOT LIKE '%Remittance%' OR i.receiver_vfy IS NULL)
+  THEN 'Remit-Dash'
+WHEN (i.sender_vfy NOT LIKE '%Remittance%' OR i.sender_vfy IS NULL) AND i.receiver_vfy LIKE '%Remittance%'
+  THEN 'Dash-Remit'
+WHEN (i.sender_vfy NOT LIKE '%Remittance%' OR i.sender_vfy IS NULL) AND (i.receiver_vfy NOT LIKE '%Remittance%' OR i.receiver_vfy IS NULL)
+  THEN 'Dash-Dash'
+END
+) Txn_Flow, i.sender_id,i.sender_msisdn, i.orig_amt, i.Year_Month, i.Sender_Vfy, i.receiver_msisdn, i.receiver_vfy, i.receiver_id
+FROM 
+(
+SELECT e.sender_id,e.sender_msisdn, e.orig_amt, e.Year_Month, e.Sender_Vfy, e.receiver_msisdn, e.receiver_vfy, h.max_acct_id AS receiver_id
+FROM 
+(
+SELECT c.SCR_ACCT_ID AS sender_id,c.acct_msisdn AS sender_msisdn, c.orig_amt, c.Year_Month, c.acct_vfy_lvl AS Sender_Vfy, c.dest_msisdn AS receiver_msisdn, d.acct_vfy_lvl AS Receiver_Vfy
+FROM
+(SELECT a.SCR_ACCT_ID,a.acct_msisdn, a.orig_amt, to_char(a.txn_dt,'YYYY-MM') AS Year_Month, b.acct_vfy_lvl, a.dest_msisdn
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM a
+LEFT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT b
+ON a.SCR_ACCT_id = b.acct_id
+    WHERE a.SVC_CLASS_NAME IN('P2P')
+      AND a.STAT = 'PST'
+      AND a.TXN_DT between to_date('1-May-2017','DD-Mon-YY') and to_date('01-Nov-2018','DD-Mon-YY')) c
+LEFT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT d
+ON c.dest_msisdn = d.acct_msisdn
+) e
+LEFT JOIN 
+(
+SELECT f.max_acct_id, g.acct_name
+FROM 
+(
+SELECT acct_id AS max_acct_id
+FROM EDWDM.TEDW_SINGCASH_ACCOUNT
+WHERE acct_stat = 'A'
+--GROUP BY ACCT_NAME
+) f
+LEFT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT g
+ON f.max_acct_id = g.acct_id
+) h
+ON e.receiver_msisdn = h.acct_name
+)
+i 
+) j
+LEFT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT k
+ON j.receiver_id = k.acct_id
+WHERE k.acct_stat = 'A'
+) l
+LEFT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT m
+ON l.sender_id = m.acct_id
+WHERE m.acct_stat = 'A'
+
+
+
+
+
+
+
+##R##
+library(data.table)
+library(readxl)
+library(xlsx)
+library(openxlsx)
+library(dplyr)
+library(sqldf)
+library(ggplot2)
+
+p2p <- read.csv("C:\\Users\\P1318124\\Desktop\\p2p_lena_carmen.csv",header=TRUE)
+p2p$CAT[p2p$ORIG_AMT < 50] <- "<50" 
+p2p$CAT[p2p$ORIG_AMT >= 50 & p2p$ORIG_AMT < 100] <- "<100" 
+p2p$CAT[p2p$ORIG_AMT >= 100 & p2p$ORIG_AMT < 200] <- "<200" 
+p2p$CAT[p2p$ORIG_AMT >= 200 & p2p$ORIG_AMT < 300] <- "<300" 
+p2p$CAT[p2p$ORIG_AMT >= 300 & p2p$ORIG_AMT < 400] <- "<400" 
+p2p$CAT[p2p$ORIG_AMT >= 400 & p2p$ORIG_AMT < 500] <- "<500"
+p2p$CAT[p2p$ORIG_AMT >= 500 & p2p$ORIG_AMT < 600] <- "<600" 
+p2p$CAT[p2p$ORIG_AMT >= 600 & p2p$ORIG_AMT < 700] <- "<700" 
+p2p$CAT[p2p$ORIG_AMT >= 700 & p2p$ORIG_AMT < 800] <- "<800"
+p2p$CAT[p2p$ORIG_AMT >= 800 & p2p$ORIG_AMT < 900] <- "<900" 
+p2p$CAT[p2p$ORIG_AMT >= 900 & p2p$ORIG_AMT < 1000] <- "<1000" 
+p2p$CAT[p2p$ORIG_AMT >= 1000] <- ">=1000" 
+
+
+p2p_dr <- p2p %>%
+filter(TXN_FLOW == "Dash-Remit") %>%
+filter(YEAR_MONTH %in% c("2018-10","2018-09","2018-08","2018-07","2018-06","2018-05"))
+
+ggplot(p2p_dr, aes(x = ORIG_AMT)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "", title = "Monetary") +
+   scale_x_continuous(breaks = c(0, 50, 100, 200, 300, 400, 500,600,700,800,900,1000))
+
+ggplot(p2p,aes(ORIG_AMT,fill=TXN_FLOW)) +
+geom_histogram(binwidth=50)
+
+ggplot(p2p_dr,aes(ORIG_AMT,fill=YEAR_MONTH)) +
+geom_histogram(binwidth=50)
+
+p2p_dr_oct <- p2p %>%
+filter(TXN_FLOW == "Dash-Remit") %>%
+filter(YEAR_MONTH =="2018-10")
+
+p2p_dr_oct$SENDER_IDN_TYPE <- as.character(p2p_dr_oct$SENDER_IDN_TYPE)
+
+
+ggplot(p2p_dr_oct,aes(ORIG_AMT,fill=SENDER_IDN_TYPE)) +
+geom_histogram(binwidth=100)
+
+qplot(p2p_dr_oct$ORIG_AMT,geom="histogram",binwidth=100)
+
+library(plotly)
+p1 <- plot_ly(p2p_dr_oct,x=~ORIG_AMT,color=~RECEIVER_IDN_TYPE) %>% add_histogram()
+
+p2 <- plot_ly(p2p_dr_oct,x=~ORIG_AMT,color=~SENDER_IDN_TYPE) %>% add_histogram()
+
+subplot(p1,p2)
+
+p2p_dr_oct$ORIG_AMT <- as.factor(p2p_dr_oct$ORIG_AMT)
+
+p3 <- plot_ly(p2p_dr_oct,x=~SENDER_IDN_TYPE,color=~CAT) %>% add_histogram()
+subplot(p3)
+p4 <- plot_ly(p2p_dr_oct,x=~RECEIVER_IDN_TYPE,color=~CAT) %>% add_histogram()
+subplot(p3,p4,nrows=2,shareX=TRUE,titleX=FALSE)
+
+
+p5 <- plot_ly(p2p_dr_oct,x=~ORIG_AMT,y=~CAT,color=~SENDER_OCC) %>% add_bars() %>% layout(barmode="stack")
+p6 <- plot_ly(p2p_dr_oct,x=~ORIG_AMT,y=~CAT,color=~RECEIVER_OCC) %>% add_bars() %>% layout(barmode="stack")
+subplot(p5,p6,nrows=2,shareX=TRUE,titleX=FALSE)
+
+p7 <- plot_ly(p2p_dr_oct,x=~SENDER_IDN_TYPE,color=~SENDER_OCC) %>% add_histogram()
+subplot(p7)
+
