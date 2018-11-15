@@ -1,35 +1,39 @@
+#install.packages("stringr", repos="http://cran.us.r-project.org")
+library(stringr)
+
 library(dplyr)
 library(lubridate)
 library(readxl)
 library(xlsx)
 library(openxlsx)
+library(scales)
 
 #google_compile <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile.csv",header=TRUE)
 
 
-google_day <- read_excel("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\2017-2018\\invoice_details_with_fx_v3_SINGTEL_DCB_201810-00004-of-00005.xlsx",1)
-google_day <- as.data.frame(google_day)
+#google_day <- read_excel("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\2017-2018\\invoice_details_with_fx_v3_SINGTEL_DCB_201810-00004-of-00005.xlsx",1)
+#google_day <- as.data.frame(google_day)
 
-google_day_rev <- google_day %>%
-select(CorrelationId, Timestamp, 'Payment Description','Subscription Id','Merchant Contact',MSISDN,transaction_status,app,item_price_in_local_currency,total_amount_in_local_currency)
+#google_day_rev <- google_day %>%
+#select(CorrelationId, Timestamp, 'Payment Description','Subscription Id','Merchant Contact',MSISDN,transaction_status,app,item_price_in_local_currency,total_amount_in_local_currency)
 
 
 #google_compile <- google_day_rev
 
-colnames(google_day_rev) <- colnames(google_compile)
-google_day_rev$CorrelationId <- as.factor(google_day_rev$CorrelationId)
-google_day_rev$TimeStamp <- as.factor(google_day_rev$TimeStamp)
-google_day_rev$Payment.Description <- as.factor(google_day_rev$Payment.Description)
-google_day_rev$Subscription.Id <- as.factor(google_day_rev$Subscription.Id)
-google_day_rev$Merchant.Contact <- as.factor(google_day_rev$Merchant.Contact)
-google_day_rev$transaction_status <- as.factor(google_day_rev$transaction_status)
-google_day_rev$app <- as.factor(google_day_rev$app)
+#colnames(google_day_rev) <- colnames(google_compile)
+#google_day_rev$CorrelationId <- as.factor(google_day_rev$CorrelationId)
+#google_day_rev$TimeStamp <- as.factor(google_day_rev$TimeStamp)
+#google_day_rev$Payment.Description <- as.factor(google_day_rev$Payment.Description)
+#google_day_rev$Subscription.Id <- as.factor(google_day_rev$Subscription.Id)
+#google_day_rev$Merchant.Contact <- as.factor(google_day_rev$Merchant.Contact)
+#google_day_rev$transaction_status <- as.factor(google_day_rev$transaction_status)
+#google_day_rev$app <- as.factor(google_day_rev$app)
 #google_day_rev$Date <- as.Date(google_day_rev$TimeStamp,format='%Y-%m-%d')
 
-google_compile <- rbind(google_compile,google_day_rev)
+#google_compile <- rbind(google_compile,google_day_rev)
 
 
-dim(google_compile)
+#dim(google_compile)
 
 ##########################
 
@@ -38,24 +42,354 @@ dim(google_compile)
 ###########################
 ###########################
 
-google_compile$MSISDN <- as.factor(google_compile$MSISDN)
+#google_compile$MSISDN <- as.factor(google_compile$MSISDN)
 
-google_compile$Date <- as.Date(google_compile$TimeStamp,format='%Y-%m-%d')
+#google_compile$Date <- as.Date(google_compile$TimeStamp,format='%Y-%m-%d')
 
-google_filter <- google_compile %>%
-filter(transaction_status == "EP_SUCCESS")
+#google_filter <- google_compile %>%
+#filter(transaction_status == "EP_SUCCESS")
 
-write.csv(google_filter,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_filter.csv",row.names=FALSE)
+#write.csv(google_filter,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_filter.csv",row.names=FALSE)
 
 
-google_compile_top_sum <- google_compile %>%
-filter(transaction_status == "EP_SUCCESS") %>%
-group_by(app) %>%
-summarise(nsum=sum(total_amount_in_local_currency), ntransact = n(), npeople = n_distinct(MSISDN)) %>%
-arrange(desc(nsum))
+#google_compile_top_sum <- google_compile %>%
+#filter(transaction_status == "EP_SUCCESS") %>%
+#group_by(app) %>%
+#summarise(nsum=sum(total_amount_in_local_currency), ntransact = n(), npeople = n_distinct(MSISDN)) %>%
+#arrange(desc(nsum))
 
-head(google_compile_top_sum,n=10)
+#head(google_compile_top_sum,n=10)
 
-google_compile_top_sum <- as.data.frame(google_compile_top_sum)
+#google_compile_top_sum <- as.data.frame(google_compile_top_sum)
 
 #write.csv(google_compile_top_sum,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile_top_sum.csv",row.names=FALSE)
+
+#do RFM on merchants, i.e. apps
+
+
+
+
+google <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_filter.csv",header=TRUE)
+google_sum <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile_top_sum.csv",header=TRUE)
+
+
+google_rev <- google %>%
+select(app,Date,total_amount_in_local_currency)
+
+
+#######CLUSTERING#######
+
+library(factoextra)
+library(silhouette)
+library(cluster)
+library(plot3Drgl)
+library(plot3D)
+library(tidyr)
+library(pastecs)
+library(fpc)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(lubridate)
+
+data <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_compile.csv",header=TRUE)
+data$Date <- as.Date(data$TimeStamp,format='%Y-%m-%d')
+
+data_rev <- data %>%
+select(app,Date,total_amount_in_local_currency)
+
+#Convert date column to date type
+#data_rev$TXN_DT <- as.character(data_rev$TXN_DT)
+#data_rev$TXN_DT <- dmy(data_rev$TXN_DT)
+#data_rev$TXN_DT <- as.Date(data_rev$TXN_DT,format='%Y/%m/%d')
+
+#Create datediff column to find number of days since last purchase for recency
+data_rev$days_since <- as.numeric(difftime(time1='2018-11-01',time2=data_rev$Date,unit="days"))
+
+colnames(data_rev)[3] <- "ORIG_AMT"
+
+data_rev$app <- tolower(data_rev$app)
+
+#Create dataset to show customer's recency, frequency and monetary information
+merchants <- data_rev %>%
+group_by(app) %>%
+summarise(recency=min(days_since),frequency=n(),monetary = mean(ORIG_AMT, na.rm = TRUE))
+write.csv(merchants,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\merchants_google_play_data.csv",row.names=FALSE)
+
+
+
+merchants <- as.data.frame(merchants)
+
+#Data Exploration
+##Descriptive Statistics
+options(digits = 2, scipen = 99)
+stat.desc(select(merchants, -app))
+
+str(merchants)
+
+#frequency
+ggplot(merchants, aes(x = frequency)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "", title = "Purchase frequency") +
+   scale_x_continuous(breaks = c(0,1, 2, 3))
+
+dim(filter(merchants, frequency == 1))[1]/dim(merchants)[1]
+#only 59% of merchants had only 1 transaction
+dim(filter(merchants, frequency == 2))[1]/dim(merchants)[1]
+#only 10% of merchants had only 2 transactions
+dim(filter(merchants, frequency == 3))[1]/dim(merchants)[1]
+#only 5% of merchants had only 3 transactions
+dim(filter(merchants, frequency >= 3))[1]/dim(merchants)[1]
+#only 31% of merchants had only 3 transactions
+
+
+#recency
+ggplot(merchants, aes(x = recency)) +
+   geom_histogram(fill = "steelblue") +
+   theme_classic() +
+   labs(x = "", y = "", title = "Recency in Days") +
+  scale_x_continuous(breaks = c(0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300,330,360,390,420,450,480,510,540,570,600))
+
+#30 days between 01 Oct 2018 and 1 Nov 2018
+dim(filter(merchants, recency < 32))[1]/dim(merchants)[1]
+#13% of merchants have transactions within 1 month between Oct 2018 and Nov 2018
+
+dim(filter(merchants, recency > 365))[1]/dim(merchants)[1]
+#40% of merchants did not have transactions in 1 year to Nov 2018
+
+#monetary
+summary(merchants$monetary)
+
+ggplot(merchants, aes(x = monetary)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "average amount", title = "Average purchase amount")
+
+ggplot(merchants, aes(x = monetary)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "amount (log10)", 
+        title = "Average purchase amount\n (Data are log transformed to ease visualization)") +
+   scale_x_log10()
+
+#Statistical Segmentation
+##Data Preparation
+## Remove customer_id column and set as row names
+merchants <- as.data.frame(merchants)
+#apply(merchants$app,1,str_replace_all(x, "[[:punct:]]", " ")
+
+merchants$app_id <- c(1:length(merchants$app))
+
+merchants_app_id_list <- merchants[,c(1,5)]
+row.names(merchants) <- merchants$app_id
+merchants <- select(merchants, -app)
+merchants <- select(merchants, -app_id)
+
+## Scale data to balance the influence of variables measured on different scales and/or with vastly different ## variances
+clust_data <- scale(merchants)
+
+#Clustering method
+set.seed(11)
+hc.complete =hclust (dist(clust_data), method = "complete")
+hc.average =hclust (dist(clust_data), method = "average")
+hc.ward =hclust (dist(clust_data), method = "ward.D2")
+
+#Dendograms
+#plot(hc.complete, main = "Complete Linkage", xlab = "", sub = "", cex = .9)
+#plot(hc.average, main = "Average Linkage", xlab = "", sub = "", cex = .9)
+plot(hc.ward, main = "Cluster Tree", xlab = "", sub = "", cex = .9)
+rect.hclust(hc.ward, k = 5, border = "darkred")
+plot(hc.ward, main = "Cluster Tree cut at 6 clusters", xlab = "", sub = "", cex = .9)
+abline(h = 82, col = "red") #??
+#Cluster tree cut at 6 clusters
+clusters <- cutree(hc.ward, 3)
+table(clusters)
+
+#Assign customers to clusters
+merchants$cluster <- clusters
+
+profiles <- merchants %>% 
+  group_by(cluster) %>%
+  summarise_all(funs(mean))
+
+cluster_counts <- merchants %>% 
+  group_by(cluster) %>% 
+  summarise(counts = n())
+
+profiles <- mutate(profiles, counts = cluster_counts$counts) 
+profiles
+
+merchants$cluster <- as.factor(merchants$cluster)
+
+
+#Clustering visualisation
+#monetary vs frequency
+ggplot(data = merchants,
+       aes(x = frequency, y = monetary, colour = cluster, shape = cluster)) +
+  geom_point() +
+  theme_dark() +
+  labs(title = "average amount spent vs. frequency", 
+       shape = "merchants\nclusters", colour = "merchants\nclusters")
+#monetary vs recency
+ggplot(data = merchants,
+       aes(x = recency, y = monetary, colour = cluster, shape = cluster)) +
+  geom_point() +
+  theme_dark() +
+  labs(title = "average amount spent vs recency",  shape = "cluster", colour = "cluster")
+
+## Project clusters onto the first 2 principal components
+
+prin_comp <- princomp(clust_data)
+nComp <- 2
+project <- predict(prin_comp, newdata=clust_data)[,1:nComp]
+
+## Create dataframe with transformed data
+
+project_data <- cbind(as.data.frame(project),
+                      cluster = as.factor(clusters))
+
+ggplot(project_data, aes(x=Comp.1, y=Comp.2)) +
+   geom_point(aes(shape=cluster, colour = cluster)) +
+   theme_dark() +
+   labs(x = "Principal Component 1", y = "Principal Component 2")
+
+merchants_comb <- cbind(merchants_app_id_list,merchants)
+write.csv(merchants_comb,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\merchants_comb.csv",row.names=FALSE)
+
+
+
+
+#Evaluating clusters
+clust_no <- 3
+
+set.seed(12)
+cboot_hclust <- clusterboot(clust_data, 
+                            clustermethod = hclustCBI,
+                            method = "ward.D2", 
+                            k = clust_no)
+
+bootMean_data <- data.frame(cluster = 1:3, bootMeans = cboot_hclust$bootmean)
+
+#Visualise evaluation results
+#A rule of thumb for interpreting stability values (Jaccard similarity value) suggests that clusters scored below 0.6 should be considered unstable.
+#Those between 0.6 and 0.75 are measuring patterns to a reasonable degree. 
+#Scores above 0.8 indicate highly stable clusters.
+
+p <- ggplot(data = bootMean_data, aes(x = cluster, y = bootMeans)) +
+     geom_point(aes(colour = "darkred", size = 1)) +
+     geom_hline(yintercept = c(0.6, 0.8)) +
+     labs(y = "stability", title = "Cluster Stability Evaluation") +
+     theme(legend.position="none")
+
+ggplotly(p)
+
+#End.
+
+scatter3D(merchants$recency,merchants$frequency,merchants$monetary,phi=0,bty="g")
+
+hist3D_fancy(merchants$recency,merchants$frequency,merchants$monetary)
+library(plot3Drgl)
+plotrgl()
+
+#silhouette
+#cl <- hclust(as.dist(clust_data,diag = TRUE, upper = TRUE), method= 'ward.D2')
+#sil_cl <- silhouette(cutree(cl, h=82) ,as.dist(clust_data), title=title(main = 'Good'))
+
+#rownames(sil_cl) <- rownames(clust_data)
+
+#plot(sil_cl)
+
+#Average Silhouette Width
+#fviz_dend(hc.ward, show_labels = FALSE, rect = TRUE)
+
+hc.cut <- hcut(clust_data, k = 6, hc_method = "ward.D2")
+
+
+fviz_silhouette(hc.cut) #Average Silhouette Width is 0.385, which is higher than k=3,4,5. Hence shoose k=6.
+#k=6 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.42
+#2       2  3240          0.24
+#3       3  3073          0.55
+#4       4   317          0.48
+#5       5  2010          0.14
+#6       6  1706          0.48
+
+#k=5 clusters
+# cluster  size ave.sil.width
+#1       1 10698          0.46
+#2       2  3240          0.26
+#3       3  3073          0.59
+#4       4   317          0.48
+#5       5  3716          0.12
+ 
+#k=4 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.50
+#2       2  3557          0.17
+#3       3  3073          0.59
+#4       4  3716          0.12
+
+#k=3 clusters
+#  cluster  size ave.sil.width
+#1       1 10698          0.54
+#2       2  3557          0.18
+#3       3  6789          0.13
+
+
+##RFM Simplified##
+merchants_comb <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\merchants_comb.csv",header=TRUE)
+merchants_comb$fm <- merchants_comb$frequency * merchants_comb$monetary
+#merchants_comb <- merchants_comb[!merchants_comb$fm %in% boxplot.stats(merchants_comb$fm)$out,]
+merchants_comb$recency_scaled <- rescale(merchants_comb$recency,to=c(0,5))
+merchants_comb$fm_scaled <- rescale(merchants_comb$fm,to=c(0,5))
+
+#remove outliers
+#write.csv(merchants_comb,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\merchants_comb_no_outliers.csv",row.names=FALSE)
+
+ggplot(merchants_comb, aes(x = fm)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "average amount", title = "Frequency * Monetary")
+
+ggplot(merchants_comb, aes(x = fm)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "amount (log10)", 
+        title = "Frequency*Monetary\n (Data are log transformed to ease visualization)") +
+   scale_x_log10()
+
+ggplot(merchants_comb, aes(x = recency)) +
+   geom_histogram(bins = 20, fill = "steelblue") +
+   theme_classic() +
+   labs(x = "average amount", title = "Recency")
+
+merchants_comb$log_fm <- log10(merchants_comb$fm)
+#merchants_comb <- merchants_comb[merchants_comb$log_fm != "-Inf",]
+merchants_comb <- merchants_comb[!merchants_comb$log_fm %in% boxplot.stats(merchants_comb$log_fm)$out,]
+merchants_comb$log_fm_scaled <- rescale(merchants_comb$log_fm,to=c(0,5))
+merchants_comb$customer_segment <- as.character(merchants_comb$app_id)
+
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=2 & merchants_comb$log_fm_scaled>=3)] <- "Loyal Customers"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=4 & merchants_comb$log_fm_scaled>=4)] <- "Champions"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=3 & merchants_comb$log_fm_scaled>=1 & merchants_comb$log_fm_scaled<3)] <- "Potential Loyalist"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=4 & merchants_comb$log_fm_scaled>=0 & merchants_comb$log_fm_scaled<1)] <- "Recent Customers"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=3 & merchants_comb$recency_scaled<4 & merchants_comb$log_fm_scaled>=0 & merchants_comb$log_fm_scaled<1)] <- "Promising"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=2 & merchants_comb$recency_scaled<3 & merchants_comb$log_fm_scaled>=2 & merchants_comb$log_fm_scaled<3)] <- "Customers Needing Attention"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=2 & merchants_comb$recency_scaled<3 & merchants_comb$log_fm_scaled>=0 & merchants_comb$log_fm_scaled<2)] <- "About To Sleep"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=0 & merchants_comb$recency_scaled<2 & merchants_comb$log_fm_scaled>=2)] <- "At Risk"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=0 & merchants_comb$recency_scaled<1 & merchants_comb$log_fm_scaled>=4)] <- "Can't Lose Them"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=1 & merchants_comb$recency_scaled<2 & merchants_comb$log_fm_scaled>=1 & merchants_comb$log_fm_scaled<2)] <- "Hibernating"
+merchants_comb$customer_segment[which(merchants_comb$recency_scaled>=0 & merchants_comb$recency_scaled<2 & merchants_comb$log_fm_scaled>=0 & merchants_comb$log_fm_scaled<2)] <- "Lost"
+
+write.csv(merchants_comb,"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\merchants_comb_segment.csv",row.names=FALSE)
+
+
+
+
+
+
+
+
+
