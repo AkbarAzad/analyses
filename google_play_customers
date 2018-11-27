@@ -1,0 +1,100 @@
+library(dplyr)
+library(ggplot2)
+library(sqldf)
+library(data.table)
+library(lubridate)
+library(plotly)
+#signup('akbar_azad', 'akbarazad93@gmail.com', save = TRUE)
+
+data <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_play_data_19112018.csv",header=TRUE)
+
+#exploring the dataset
+dim(data)
+colnames(data)
+class(data)
+str(data)
+summary(data)
+
+#Useful columns are TimeStamp, MSISDN,app,total_amount_in_local_currency,Date.
+
+#remove NAs and 0s where needed 
+data_use <- data[!is.na(data$MSISDN),]
+data_use <- data_use[!is.na(data_use$app),]
+data_use <- data_use[data_use$total_amount_in_local_currency >0,]
+
+cust <- data_use %>%
+filter(transaction_status == "EP_SUCCESS") %>%
+group_by(MSISDN) %>%
+summarise(recency = 1/as.numeric(difftime(time1="2018-11-01",time2=max(as.Date(Date,format='%Y-%m-%d')),unit="days")),
+frequency=as.numeric(n()),
+monetary=sum(total_amount_in_local_currency))
+
+#explore cust
+dim(cust)
+class(cust)
+colnames(cust)
+str(cust)
+summary(cust)
+
+#cleaning cust
+class(cust$MSISDN)
+cust$MSISDN <- as.factor(cust$MSISDN)
+cust <- as.data.frame(cust)
+
+
+#explore cust
+#3d scatter plot in plotly
+ p <- plot_ly(cust,x=~recency,y=~frequency,z=~monetary) %>%
+add_markers() %>%
+layout(scene=list(xaxis=list(title='Recency'),yaxis=list(title='Frequency'),zaxis=list(title='Monetary')))
+
+#create shareable API link to chart above
+
+#chart_link <- api_create(p,filename="scatter3d-basic")
+#chart_link
+
+#Normalisation and perform RFM scoring of 1 to 5.
+normalise <- function(x) {
+return (((x-min(x))/(max(x)-min(x)))*5)}
+
+cust_norm <- as.data.frame(lapply(cust[2:4],normalise))
+
+#explore cust_norm
+dim(cust_norm)
+colnames(cust_norm)
+class(cust_norm)
+str(cust_norm)
+summary(cust_norm)
+
+#clustering
+wss <- (nrow(cust_norm)-1)*sum(apply(cust_norm,2,var))
+for(i in 1:15) wss[i] <- sum(kmeans(cust_norm,centers=i)$withinss)
+plot(1:15,wss,type="b",xlab="Number of clusters",ylab="Within Group Sum of Squares")
+
+cust_cluster <- kmeans(cust_norm,4,nstart=20)
+cust_cluster$cluster <- as.factor(cust_cluster$cluster)
+
+#explore cust_cluster
+dim(cust_cluster)
+class(cust_cluster)
+colnames(cust_cluster)
+str(cust_cluster)
+summary(cust_cluster)
+
+#visualise cluster
+ggplot(cust_norm,aes(recency,monetary,color=cust_cluster$cluster))+geom_point()
+
+#Visualise more than 2 variables, use pairs function
+pairs(~recency+frequency+monetary,data=cust_norm
+
+cust_bind <- cbind(cust[,1],cust_norm)
+cust_bind <- as.data.frame(cust_bind)
+colnames(cust_bind)[1] <- "MSISDN"
+
+pairs(~recency+frequency+monetary,data=cust_bind,main="Scatterplot Basic")
+
+
+
+
+
+
