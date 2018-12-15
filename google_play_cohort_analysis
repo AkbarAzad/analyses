@@ -1,0 +1,144 @@
+#plan
+#- perform cohort analysis on google data from Feb 2018 to Oct 2018
+#- find churn rate
+#- cohorts be represented by month-year
+#- data format as follows: data;revenue;msisdn
+
+#load packages
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(tibble)
+library(stringr)
+library(reshape2)
+
+#load dataset, i.e. google play data
+data <- read.csv("C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_play_data_19112018.csv",header=TRUE)
+
+#filter data to show months Feb-2018 onwards
+colnames(data)
+head(data$Date)
+head(ymd(data$Date))
+google <- data %>%
+filter(ymd(data$Date) > '2018-01-31')
+
+#massage data into specified format
+#ca for cohort analysis
+google_ca <- google%>%
+filter(transaction_status == 'EP_SUCCESS') %>%
+group_by(Date,MSISDN) %>%
+summarise(revenue = sum(total_amount_in_local_currency))
+
+#change date format to year and month
+google_ca$Date <- as.character(google_ca$Date)
+google_ca$month <- month(google_ca$Date)
+google_ca$year <- year(google_ca$Date)
+
+
+length(unique(google_ca$MSISDN))
+
+#changing the date format and grouping by date
+google_ca2 <- google_ca
+google_ca2$Date <- format(as.Date(google_ca$Date,format='%Y-%m-%d'),format='%Y-%m')
+
+#build cohort table
+cohort <- google_ca2 %>% #store data in table called cohort
+  group_by(MSISDN) %>% #group all the users/clients together
+  mutate(first = min(Date)) %>% #for every user/client take the first period
+  group_by(first, Date) %>% #group by this first period + other periods
+  summarise(users = n()) %>% #for each combinations, count the number of users
+  spread(Date, users) #make columns with the period names
+
+#write.csv(as.data.frame(cohort),"C:\\Users\\P1318124\\Desktop\\Apple & Google\\Analyses\\google_play_cohort_analysis.csv",row.names=FALSE)
+
+#align the table created a bove to the left like a normal cohort table starting from column 2
+shiftrow <- function(v){
+  #put a vactor in, strip off leading NA values, and place that amount at the end
+  first_na_index <- min(which(!is.na(v)))
+  
+  #return that bit to the end, and pad with NA's
+  c(v[first_na_index:length(v)], rep(NA, first_na_index-1))
+}
+
+#create a new dataframe, with shifted rows(ad keep the first row)
+shifted <- data.frame(
+  cohort = cohort$first,
+  t(apply(select(as.data.frame(cohort), 2:ncol(cohort)), #from the 2nd column to the end
+          1, #for every row
+          shiftrow
+  ))
+)
+
+#make the column names readable
+#first should be "cohort" and the rest dates
+
+colnames(shifted) <-c("cohort", sub("","month.", str_pad(1:(ncol(shifted)-1),2, pad = "0")))
+
+#percentages
+#we want every year and month to be expressed as a percentange
+#create new table for this . We divide all year,month columns by the first year,month of that row
+shifted_pct <- data.frame(
+  cohort = shifted$cohort, #first row
+  shifted[,2:nrow(shifted)] / shifted[["month.01"]] #rest:divide by year&month1
+)
+
+#                                             PLOTS
+######################################################################################################################
+
+#ggplot loves long data.Let's melt it. One for the absolute values, one for the pcts
+plotdata_abs <- gather(shifted,     "cohort_age", "people"  ,2:ncol(shifted    ))
+plotdata_pct <- gather(shifted_pct, "cohort_age", "percent" ,2:ncol(shifted_pct))
+
+# now add some data.. we need pretty labels..
+# first bit is the length of the width of the wide column (minus 1, that's the cohort name)
+# that contains the absolute numbers
+# last bit is the rest, those are percentages.
+labelnames <- c( plotdata_abs$people[1:(ncol(shifted)-1)],
+                 plotdata_pct$percent[(ncol(shifted)):(nrow(plotdata_pct))])
+
+# we need pretty labels.
+pretty_print <- function(n) {
+  case_when( n <= 1  ~ sprintf("%1.0f %%", n*100),
+             n >  1  ~ as.character(n),
+             TRUE    ~ " ") # for NA values, skip the label
+}
+
+# create the plot data
+plotdata <- data.frame(
+  cohort     = plotdata_pct$cohort,
+  cohort_age = plotdata_pct$cohort_age,
+  percentage = plotdata_pct$percent,
+  label      = pretty_print(labelnames)
+)
+
+#plot (with reordered y axis, oldesr group on top)
+p <- ggplot(plotdata, aes(x = cohort_age, y = reorder(cohort, desc(cohort)))) +
+  geom_raster(aes(fill = percentage)) +
+  #scale_fill_gradient(low = "white", high = "red") + coord_fixed() +
+  scale_fill_continuous(guide = FALSE) + coord_equal(ratio = 1) + # no legend
+  geom_text(aes(label = label), size = 4, color = "white") +
+  xlab("cohort age") + ylab("cohort") + 
+  ggtitle(paste("Retention table (cohort) for Google Play DCB"))
+plot(p)
+
+######################################################################################################################
+#                                                  PLOT2
+######################################################################################################################
+a <- shifted[,c(2:10)]
+b <- shifted[,2]
+retention <- apply(a, 2, function(a) a/b )
+retention <- data.frame(cohort=(shifted$cohort), retention)
+retention <- retention[,-2]
+
+cohort_plot <- melt(retention, id.vars = "cohort")
+colnames(cohort_plot) <- c("cohort", "month", "retention")
+cohort_plot <- filter(cohort_plot, retention != 0)
+c <- ggplot(cohort_plot, aes(x=month, y=retention, group=cohort, colour=cohort))
+c <-c + geom_line(size=2, alpha=0.5) +
+  geom_point(size=3, alpha=1) +
+  geom_smooth(aes(group=1), method = "loess", size=3, colour="turquoise", se=FALSE) +
+  labs(title="Cohorts Retention ratio")
+
+c + scale_colour_brewer(palette="Set3") + theme(panel.background = element_blank())
+
