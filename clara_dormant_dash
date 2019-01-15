@@ -1,0 +1,309 @@
+#SQL
+SELECT c.acct_id, d.acct_name, c.finalmaxdt,d.acct_stat,d.account_svf_type
+FROM 
+(
+SELECT b.acct_id, b.finalmaxdt
+FROM
+(
+SELECT a.acct_id, MAX(a.maxdt) AS finalmaxdt
+FROM
+(
+--remittance
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+WHERE brnd_grp = 'International Money Remittance'
+AND stat LIKE '%PST%'
+AND data_txn_rfnd = 'False'
+AND acct_MSISDN != '6583381170' 
+AND acct_MSISDN != '6597727199'
+AND acct_MSISDN != '6596510899'
+AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+GROUP BY scr_acct_id
+
+UNION
+--IAT
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+      WHERE svc_class_name = 'OnePay Payment'
+      --and TXN_DT between to_date('1-Apr-2018','DD-Mon-YY') and to_date('1-May-2018','DD-Mon-YY')
+      and stat LIKE '%PST%'
+      and extra_info1 = '08993385'
+      --and orig_amt > 0.09
+      --and data_txn_rfnd = 'False'
+      AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+      GROUP BY scr_acct_id
+UNION
+--prepaid topup
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+    WHERE svc_class_name IN('SingTel Prepaid Top Up')
+      AND STAT LIKE '%PST%'
+      AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+      AND data_txn_rfnd = 'False'
+group by scr_acct_id
+
+UNION
+--cashin
+SELECT dest_cust_id AS acct_id, MAX(txn_dt) AS maxdt 
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+WHERE (SVC_CLASS_NAME NOT like '%Autosweep%' OR SVC_CLASS_NAME NOT like '%Adjustment%')
+AND DATA_TXN_RFND='False'
+AND (STAT = 'PST' OR STAT = 'PST7' OR STAT = 'PST9')
+AND BRND_GRP_ID IN ('2','27')
+--AND DEST_MSISDN != MAKER_REF
+AND DEST_MSISDN != '6583381170' 
+AND DEST_MSISDN != '6597727199'
+AND DEST_MSISDN != '6596510899'
+and dest_msisdn > '6580000000'
+AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+GROUP BY  dest_cust_id
+
+UNION
+--p2p
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+    WHERE SVC_CLASS_NAME IN('P2P')
+      AND STAT LIKE '%PST%'
+      AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+      GROUP BY  scr_acct_id
+
+UNION
+--p2m
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+    WHERE SVC_CLASS_NAME in ('ISO8583 Visa Paywave', 'ISO8583 Visa Online', 'P2M', 'P2M Pinless')
+      and orig_amt > 0.09
+      and data_txn_rfnd = 'False'
+      and STAT LIKE '%PST%'
+      AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+      GROUP BY  scr_acct_id
+
+UNION
+--cashout
+SELECT scr_acct_id AS acct_id, MAX(txn_dt) AS maxdt
+FROM EDWDM.TEDW_SINGCASH_SALESJOURNAL_DOM
+    WHERE SVC_CLASS_NAME IN('Cashout2CASA',
+                            'CASA Cashout DBS')
+      AND STAT LIKE '%PST%'
+      AND BRND_GRP_ID = '36'
+      AND txn_dt < TO_DATE('01-Jan-2019','DD-Mon-YYYY')
+      GROUP BY scr_acct_id
+) a
+GROUP BY a.acct_id
+ORDER BY finalmaxdt DESC
+) b
+WHERE --(TRUNC(TO_DATE('31-12-18','DD-MM-YY')) - TRUNC(b.finalmaxdt)) < 30
+--MONTHS_BETWEEN(TO_DATE('31-12-18','DD-MM-YY'),TRUNC(b.finalmaxdt)) > 12
+b.finalmaxdt < TO_DATE('01-07-16','DD-MM-YY')
+ORDER BY b.finalmaxdt ASC
+) c
+RIGHT JOIN EDWDM.TEDW_SINGCASH_ACCOUNT d
+ON c.acct_id = d.acct_id
+WHERE d.acct_stat = 'A'
+
+
+
+#R
+library(dplyr)
+library(sqldf)
+library(data.table)
+library(lubridate)
+
+#dormant_12 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_12months.csv", header=TRUE)
+#dormant_24 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_24months.csv", header=TRUE)
+#dormant_36 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_36months.csv", header=TRUE)
+
+dormant <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_15012019.csv", header=TRUE)
+
+wallet <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\cbrp_daily_wallet_balance_31122018.csv",header=TRUE)
+
+
+head(dormant)
+colnames(dormant)
+dim(dormant)
+
+head(wallet)
+colnames(wallet)
+dim(wallet)
+colnames(wallet)[1] <- 'ACCT_NAME'
+colnames(wallet)[3] <- 'ACCT_STAT'
+length(wallet$ACCT_NAME)
+length(unique(wallet$ACCT_NAME))
+wallet$ACCT_NAME <- as.character(wallet$ACCT_NAME)
+
+##################################################
+##################################################
+#Dormant 01 Jul 2016#
+length(dormant$ACCT_NAME)
+length(unique(dormant$ACCT_NAME))
+
+length(dormant$ACCT_ID[!is.na(dormant$ACCT_ID)])
+
+dormant$ACCT_NAME <- as.character(dormant$ACCT_NAME)
+dormant$date <- as.Date(dormant$FINALMAXDT,format='%d/%m/%Y')
+#dormant$date <- as.POSIXct(as.Date(dormant$FINALMAXDT,'%d/%m/%Y'),'%d/%m/%Y')
+
+dormant_jul <- dormant %>%
+filter(as.Date(FINALMAXDT,'%d/%m/%Y') < as.Date('01/07/16','%d/%m/%Y'))
+
+#dormant_notxn <- dormant %>%
+#filter(FINALMAXDT=='')
+
+dormant_jul$ACCT_NAME <- as.character(dormant_jul$ACCT_NAME)
+dormant_jul$ACCT_STAT <- as.character(dormant_jul$ACCT_STAT)
+dormant_jul$ACCOUNT_SVF_TYPE <- as.character(dormant_jul$ACCOUNT_SVF_TYPE)
+
+dormant_jul_wallet <- left_join(dormant_jul,wallet,by=c('ACCT_NAME','ACCT_STAT','ACCOUNT_SVF_TYPE'))
+dormant_jul_wallet_0_bal <- dormant_jul_wallet %>%
+filter(W2_BALANCE == 0)
+
+dormant_notxn_wallet <- left_join(dormant_notxn,wallet,by=c('ACCT_NAME','ACCT_STAT','ACCOUNT_SVF_TYPE'))
+
+#dormant_jul_wallet_0_bal_msisdn <- as.data.frame(dormant_jul_wallet_0_bal$ACCT_NAME)
+#colnames(dormant_jul_wallet_0_bal_msisdn) <- 'ACCT_NAME'
+#dormant_notxn_msisdn <- as.data.frame(dormant_notxn$ACCT_NAME)
+#colnames(dormant_notxn_msisdn) <- 'ACCT_NAME'
+
+dormant_msisdn <- rbind(dormant_jul_wallet_0_bal,dormant_notxn_wallet)
+
+write.csv(dormant_msisdn,"C:\\Users\\P1318124\\Desktop\\Clara\\dormant_msisdn.csv",row.names=FALSE)
+
+#################################################################
+################################################################
+####################################################################
+
+
+#dormant_notxn$ACCT_NAME <- as.character(dormant_notxn$ACCT_NAME)
+#dormant_notxn_wallet <- left_join(dormant_notxn,wallet,by='ACCT_NAME')
+#dormant_notxn_wallet_0_bal <- dormant_notxn_wallet %>%
+#filter(W2_BALANCE > 0)
+
+
+#dormant_wallet <- left_join(dormant,wallet,by='ACCT_NAME')
+
+#dormant_wallet_0_bal <- dormant_wallet %>%
+#filter(W2_BALANCE == 0)
+
+#dim(dormant_wallet_0_bal)
+#head(dormant_wallet_0_bal)
+#colnames(dormant_wallet_0_bal)
+
+#dormant_wallet_0_bal_cust <- sqldf("SELECT ACCT_NAME FROM dormant_wallet_0_bal")
+#dim(dormant_wallet_0_bal_cust)
+#head(dormant_wallet_0_bal_cust)
+
+
+#head(dormant_12)
+#colnames(dormant_12)
+#dim(dormant_12)
+
+#head(wallet)
+#colnames(wallet)
+#dim(wallet)
+#colnames(wallet)[1] <- 'ACCT_NAME'
+#length(wallet$ACCT_NAME)
+#length(unique(wallet$ACCT_NAME))
+#wallet$ACCT_NAME <- as.character(wallet$ACCT_NAME)
+
+##################################################
+##################################################
+#Dormant more than 12 months
+#length(dormant_12$ACCT_NAME)
+#length(unique(dormant_12$ACCT_NAME))
+
+#dormant_12$ACCT_NAME <- as.character(dormant_12$ACCT_NAME)
+
+#dormant_12_wallet <- left_join(dormant_12,wallet,by='ACCT_NAME')
+
+#dormant_12_wallet_0_bal <- dormant_12_wallet %>%
+#filter(W2_BALANCE == 0)
+
+#dim(dormant_12_wallet_0_bal)
+#head(dormant_12_wallet_0_bal)
+#colnames(dormant_12_wallet_0_bal)
+
+#dormant_12_wallet_0_bal_cust <- sqldf("SELECT ACCT_NAME FROM dormant_12_wallet_0_bal")
+#dim(dormant_12_wallet_0_bal_cust)
+#head(dormant_12_wallet_0_bal_cust)
+
+##################################################
+##################################################
+#Dormant more than 24 months
+#length(dormant_24$ACCT_NAME)
+#length(unique(dormant_24$ACCT_NAME))
+
+#dormant_24$ACCT_NAME <- as.character(dormant_24$ACCT_NAME)
+
+#dormant_24_wallet <- left_join(dormant_24,wallet,by='ACCT_NAME')
+
+#dormant_24_wallet_0_bal <- dormant_24_wallet %>%
+#filter(W2_BALANCE == 0)
+
+#dim(dormant_24_wallet_0_bal)
+#head(dormant_24_wallet_0_bal)
+#colnames(dormant_24_wallet_0_bal)
+
+#dormant_24_wallet_0_bal_cust <- sqldf("SELECT ACCT_NAME FROM dormant_24_wallet_0_bal")
+#dim(dormant_24_wallet_0_bal_cust)
+#head(dormant_24_wallet_0_bal_cust)
+
+##################################################
+##################################################
+#Dormant more than 36 months
+#length(dormant_36$ACCT_NAME)
+#length(unique(dormant_36$ACCT_NAME))
+
+#dormant_36$ACCT_NAME <- as.character(dormant_36$ACCT_NAME)
+
+#dormant_36_wallet <- left_join(dormant_36,wallet,by='ACCT_NAME')
+
+#dormant_36_wallet_0_bal <- dormant_36_wallet %>%
+#filter(W2_BALANCE == 0)
+
+#dim(dormant_36_wallet_0_bal)
+#head(dormant_36_wallet_0_bal)
+#colnames(dormant_36_wallet_0_bal)
+
+#dormant_36_wallet_0_bal_cust <- sqldf("SELECT ACCT_NAME FROM dormant_36_wallet_0_bal")
+#dim(dormant_36_wallet_0_bal_cust)
+#head(dormant_36_wallet_0_bal_cust)
+
+
+##################################################
+##################################################
+#export as csv
+write.csv(dormant_12_wallet_0_bal_cust,"C:\\Users\\P1318124\\Desktop\\Clara\\dormant_12_wallet_0_bal_cust.csv",row.names=FALSE)
+write.csv(dormant_24_wallet_0_bal_cust,"C:\\Users\\P1318124\\Desktop\\Clara\\dormant_24_wallet_0_bal_cust.csv",row.names=FALSE)
+write.csv(dormant_36_wallet_0_bal_cust,"C:\\Users\\P1318124\\Desktop\\Clara\\dormant_36_wallet_0_bal_cust.csv",row.names=FALSE)
+
+
+
+#Never transact
+
+notxn_12 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_12months.csv", header=TRUE)
+notxn_24 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_24months.csv", header=TRUE)
+notxn_36 <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\dash_dormant_users_09012019_36months.csv", header=TRUE)
+wallet <- read.csv("C:\\Users\\P1318124\\Desktop\\Clara\\cbrp_daily_wallet_balance_31122018.csv",header=TRUE)
+
+length(notxn_12$FINALMAXDT)
+
+length(notxn_12$FINALMAXDT[notxn_12$FINALMAXDT==""])
+
+notxn_12_rev <- notxn_12 %>%
+filter(FINALMAXDT=="")
+
+notxn_12_rev$ACCT_NAME <- as.character(notxn_12_rev$ACCT_NAME)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
